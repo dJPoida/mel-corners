@@ -1,0 +1,25 @@
+{
+  "name": "corners",
+  "version": "1.0.0",
+  "description": "Corners - A Kaboom.js game",
+  "type": "module",
+  "main": "dist/main.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build"
+  },
+  "keywords": [
+    "kaboom",
+    "game",
+    "typescript"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "kaboom": "^3000.1.17"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "vite": "^5.0.0"
+  }
+} 
