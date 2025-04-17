@@ -1,7 +1,7 @@
-import kaboom from "kaboom";
+import kaboom, { KaboomCtx, Color, Vec2 } from "kaboom";
 
 // Initialize Kaboom context
-const k = kaboom({
+const k: KaboomCtx = kaboom({
     global: true, // Import Kaboom functions into global namespace
     width: 1280, // Game canvas width
     height: 720, // Game canvas height
@@ -110,12 +110,119 @@ k.scene("menu", () => {
     });
 });
 
-// Define a placeholder game scene
+// Define Game Constants
+const ARENA_WIDTH = k.width();
+const ARENA_HEIGHT = k.height();
+const START_ZONE_WIDTH = ARENA_WIDTH * 0.15;
+const GAME_ZONE_X = START_ZONE_WIDTH;
+const GAME_ZONE_WIDTH = ARENA_WIDTH * 0.85;
+
+// Calculate playable height first, assuming a placeholder/max jail height initially if needed,
+// or just calculate base size first if jail height depends ONLY on base size.
+const TEMP_MAX_JAIL_HEIGHT = ARENA_HEIGHT * 0.2; // Estimate max jail height for calculation
+const APPROX_PLAYABLE_HEIGHT = ARENA_HEIGHT - TEMP_MAX_JAIL_HEIGHT;
+
+// Calculate Base Size based on approximate playable area
+const BASE_SIZE_FRACTION = 0.2;
+const BASE_SIZE = Math.min(GAME_ZONE_WIDTH, APPROX_PLAYABLE_HEIGHT) * BASE_SIZE_FRACTION;
+
+// Now define the actual Jail Height and Y position
+const JAIL_HEIGHT = BASE_SIZE;
+const JAIL_Y = ARENA_HEIGHT - JAIL_HEIGHT;
+
+// We can recalculate playable height accurately now if needed elsewhere, but baseDist uses it
+const GAME_ZONE_PLAYABLE_HEIGHT = ARENA_HEIGHT - JAIL_HEIGHT;
+
+// Colors
+const COLOR_START_ZONE: Color = k.rgb(50, 50, 50);
+const COLOR_GAME_ZONE: Color = k.rgb(40, 40, 40);
+const COLOR_BASE: Color = k.rgb(80, 80, 150);
+const COLOR_JAIL: Color = k.rgb(150, 80, 80);
+const COLOR_TEXT: Color = k.WHITE;
+
+// Define the game scene
 k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
+    // --- Draw Arena Layout ---
+
+    // Starting Zone Background
     k.add([
-        k.text(`Game Started with ${numPlayers} Player(s)\n(Placeholder - Press Esc to return to menu)`, { size: 30 }),
-        k.pos(k.width() / 2, k.height() / 2),
-        k.anchor("center")
+        k.rect(START_ZONE_WIDTH, ARENA_HEIGHT),
+        k.pos(0, 0),
+        k.color(COLOR_START_ZONE),
+        k.fixed(), // Keep UI elements fixed relative to camera
+        "startZoneBg"
+    ]);
+
+    // Game Zone Background
+    k.add([
+        k.rect(GAME_ZONE_WIDTH, ARENA_HEIGHT),
+        k.pos(GAME_ZONE_X, 0),
+        k.color(COLOR_GAME_ZONE),
+        k.fixed(),
+        "gameZoneBg"
+    ]);
+
+    // --- Base Positions (within Game Zone) ---
+    // Center bases vertically within the playable area (above jail)
+    const gameZoneCenter = k.vec2(
+        GAME_ZONE_X + GAME_ZONE_WIDTH / 2, 
+        GAME_ZONE_PLAYABLE_HEIGHT / 2 // Use playable height center
+    );
+    // Base distance calculation now uses the final GAME_ZONE_PLAYABLE_HEIGHT
+    const baseDist = Math.min(GAME_ZONE_WIDTH, GAME_ZONE_PLAYABLE_HEIGHT) * 0.4;
+
+    const basePositions: { [key: number]: Vec2 } = {
+        1: k.vec2(gameZoneCenter.x - baseDist * 0.8, gameZoneCenter.y - baseDist * 0.7), // Top-left
+        2: k.vec2(gameZoneCenter.x + baseDist * 0.8, gameZoneCenter.y - baseDist * 0.7), // Top-right
+        3: k.vec2(gameZoneCenter.x, gameZoneCenter.y), // Center
+        4: k.vec2(gameZoneCenter.x - baseDist * 0.8, gameZoneCenter.y + baseDist * 0.7), // Bottom-left
+        5: k.vec2(gameZoneCenter.x + baseDist * 0.8, gameZoneCenter.y + baseDist * 0.7), // Bottom-right
+    };
+
+    // Draw Bases
+    for (let i = 1; i <= 5; i++) {
+        const pos = basePositions[i];
+        k.add([
+            k.rect(BASE_SIZE, BASE_SIZE),
+            k.pos(pos),
+            k.anchor("center"),
+            k.color(COLOR_BASE),
+            k.area(), // Make it detectable by players
+            `base${i}`, // Tag for identification
+            { baseId: i } // Custom property
+        ]);
+        // Base Number Text
+        k.add([
+            k.text(String(i), { size: 40 }),
+            k.pos(pos),
+            k.anchor("center"),
+            k.color(COLOR_TEXT)
+        ]);
+    }
+
+    // --- Jail Zone ---
+    k.add([
+        k.rect(GAME_ZONE_WIDTH, JAIL_HEIGHT),
+        k.pos(GAME_ZONE_X, JAIL_Y),
+        k.color(COLOR_JAIL),
+        k.area(),
+        k.fixed(),
+        "jailZone"
+    ]);
+    k.add([
+        k.text("JAIL", { size: 50 }),
+        k.pos(GAME_ZONE_X + GAME_ZONE_WIDTH / 2, JAIL_Y + JAIL_HEIGHT / 2),
+        k.anchor("center"),
+        k.color(COLOR_TEXT),
+        k.fixed()
+    ]);
+
+    // --- Placeholder Info & Controls ---
+    k.add([
+        k.text(`Players: ${numPlayers}`, { size: 24 }),
+        k.pos(10, 10),
+        k.color(COLOR_TEXT),
+        k.fixed()
     ]);
 
     // Go back to menu (for testing)
