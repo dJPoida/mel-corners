@@ -6,7 +6,8 @@
   "main": "dist/main.js",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build"
+    "build": "tsc && vite build",
+    "preview": "vite preview"
   },
   "keywords": [
     "kaboom",

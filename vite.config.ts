@@ -8,6 +8,8 @@ export default defineConfig({
   },
   // Optional: Configure build options
   build: {
+    sourcemap: true, // Enable production source maps
+    minify: false, // Disable minification for testing
     // Output directory (default is 'dist')
     // outDir: 'dist',
   },

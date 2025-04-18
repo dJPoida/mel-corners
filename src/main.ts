@@ -2,7 +2,7 @@ import kaboom, { KaboomCtx, Color, Vec2, GameObj } from "kaboom";
 
 // Initialize Kaboom context
 const k: KaboomCtx = kaboom({
-    global: true, // Import Kaboom functions into global namespace
+    global: false, // Import Kaboom functions into global namespace
     width: 1280, // Game canvas width
     height: 720, // Game canvas height
     scale: 1, // Keep scale at 1 for now
