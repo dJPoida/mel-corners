@@ -335,17 +335,39 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
 
     // --- Spawn Players ---
     const players: { [id: string]: GameObj } = {};
-    const playerSpawnY = ARENA_HEIGHT / 2; // Center vertically in start zone
+    const playerSpawnX = START_ZONE_WIDTH / 2; // Horizontal center of start zone
+    const totalPlayers = 5;
+    const numAI = totalPlayers - numPlayers;
+
+    // Define vertical spawning constraints
+    const topBarrierHeight = JAIL_HEIGHT; // Same height as jail
+    const bottomBarrierHeight = JAIL_HEIGHT; // Same height as jail
+    const spawnAreaYStart = topBarrierHeight;
+    const spawnAreaHeight = ARENA_HEIGHT - topBarrierHeight - bottomBarrierHeight;
+
+    // Calculate vertical spawn positions within the constrained area
+    const totalPlayerHeight = totalPlayers * PLAYER_SIZE;
+    // Ensure spacing isn't negative if players don't fit (shouldn't happen with current sizes)
+    const playerSpacing = Math.max(0, (spawnAreaHeight - totalPlayerHeight) / (totalPlayers + 1));
+    // Start spawning relative to the top of the spawn area
+    let currentSpawnY = spawnAreaYStart + playerSpacing;
 
     // Spawn Player 1
-    players["p1"] = spawnPlayer(k, "p1", k.vec2(START_ZONE_WIDTH / 2, playerSpawnY - (numPlayers > 1 ? PLAYER_SIZE : 0)), PLAYER_COLOR_P1);
+    players["p1"] = spawnPlayer(k, "p1", k.vec2(playerSpawnX, currentSpawnY + PLAYER_SIZE / 2), PLAYER_COLOR_P1, false);
+    currentSpawnY += PLAYER_SIZE + playerSpacing;
 
     // Spawn Player 2 if selected
     if (numPlayers === 2) {
-        players["p2"] = spawnPlayer(k, "p2", k.vec2(START_ZONE_WIDTH / 2, playerSpawnY + PLAYER_SIZE), PLAYER_COLOR_P2);
+        players["p2"] = spawnPlayer(k, "p2", k.vec2(playerSpawnX, currentSpawnY + PLAYER_SIZE / 2), PLAYER_COLOR_P2, false);
+        currentSpawnY += PLAYER_SIZE + playerSpacing;
     }
 
-    // --- Player Movement & Animation --- 
+    // Spawn AI Players
+    for (let i = 0; i < numAI; i++) {
+        const aiId = `ai${i + 1}`;
+        players[aiId] = spawnPlayer(k, aiId, k.vec2(playerSpawnX, currentSpawnY + PLAYER_SIZE / 2), PLAYER_COLOR_AI, true);
+        currentSpawnY += PLAYER_SIZE + playerSpacing;
+    }
 
     // P1 Rotation
     k.onKeyDown("left", () => {
@@ -465,13 +487,15 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
         }
     });
 
-    // --- Placeholder Info & Controls ---
+    // --- Placeholder Info & Controls --- REMOVED Player Count Text
+    /*
     k.add([
         k.text(`Players: ${numPlayers}`, { size: 24 }),
         k.pos(10, 10),
         k.color(COLOR_TEXT),
         k.fixed()
     ]);
+    */
 
     // Go back to menu (for testing)
     k.onKeyPress("escape", () => {
