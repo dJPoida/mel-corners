@@ -148,6 +148,12 @@ const COLOR_BASE: Color = k.rgb(80, 80, 150);
 const COLOR_JAIL: Color = k.rgb(150, 80, 80);
 const COLOR_TEXT: Color = k.WHITE;
 
+// Die Visual Constants
+const DIE_SIZE = 60;
+const DIE_BG_COLOR = k.WHITE;
+const DIE_DOT_COLOR = k.BLACK;
+const DIE_DOT_SIZE = DIE_SIZE * 0.15;
+
 // Function to spawn a player
 function spawnPlayer(k: KaboomCtx, id: string, startPos: Vec2, color: Color, isAI: boolean = false) {
     const headSize = PLAYER_SIZE * 0.6;
@@ -258,6 +264,183 @@ function spawnPlayer(k: KaboomCtx, id: string, startPos: Vec2, color: Color, isA
 
 // Define the game scene
 k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
+    // --- Game State ---
+    let currentRound = 0;
+    const maxRounds = 10;
+    let gameState: 'waiting' | 'countdown' | 'rolling' | 'checking' | 'paused' | 'gameOver' = 'waiting';
+    let roundTimerHandle: any = null; // Use any or a specific handle type if known
+    let rolledNumber: number | null = null;
+
+    // --- UI Elements ---
+    // Round Counter (Top-center of Start Zone)
+    const roundText = k.add([
+        k.text(`Round: ${currentRound}/${maxRounds}`, { size: 24 }),
+        k.pos(START_ZONE_WIDTH / 2, 20), // Position in top-center of start zone
+        k.anchor("top"),
+        k.fixed(),
+        k.z(100), // Ensure it's drawn on top
+        "roundText"
+    ]);
+
+    // Die Display (Parent Object with Background)
+    const dieDisplayPos = k.vec2(START_ZONE_WIDTH / 2, 70); // Position below round text
+    const dieDisplay = k.add([
+        k.pos(dieDisplayPos),
+        k.rect(DIE_SIZE, DIE_SIZE),
+        k.color(DIE_BG_COLOR),
+        k.anchor("top"),
+        k.fixed(),
+        k.z(99), // Below round text, above other things
+        "dieDisplayContainer" // Tag for the container itself
+    ]);
+
+    // Create permanent, hidden dots for the die face
+    const dieDotPositions = {
+        center: k.vec2(0, 0),
+        tl: k.vec2(-DIE_SIZE / 4, -DIE_SIZE / 4),
+        tr: k.vec2(DIE_SIZE / 4, -DIE_SIZE / 4),
+        bl: k.vec2(-DIE_SIZE / 4, DIE_SIZE / 4),
+        br: k.vec2(DIE_SIZE / 4, DIE_SIZE / 4),
+        ml: k.vec2(-DIE_SIZE / 4, 0), // Middle-left
+        mr: k.vec2(DIE_SIZE / 4, 0), // Middle-right
+    };
+    const dieDots: { [key: string]: GameObj } = {};
+    const centerOffset = k.vec2(0, DIE_SIZE / 2); // Offset from dieDisplay's top anchor
+
+    for (const key in dieDotPositions) {
+        dieDots[key] = dieDisplay.add([
+            k.circle(DIE_DOT_SIZE / 2),
+            k.pos(centerOffset.add(dieDotPositions[key as keyof typeof dieDotPositions])),
+            k.anchor("center"),
+            k.color(DIE_DOT_COLOR),
+            k.opacity(0), // Start hidden
+            k.z(100), 
+            "dot", // Still tag them if needed, though direct references are better
+            `dot-${key}` // Unique tag per dot
+        ]);
+    }
+
+    // --- Helper Function to Draw Die Face ---
+    function drawDieFace(num: number | null) {
+        // Hide all dots initially
+        for (const key in dieDots) {
+            dieDots[key].opacity = 0;
+        }
+
+        if (num === null || num < 1 || num > 6) {
+            return; // Leave all dots hidden
+        }
+
+        // Show required dots based on number
+        // Center dot
+        if (num === 1 || num === 3 || num === 5) {
+            dieDots.center.opacity = 1;
+        }
+        // Top-left & Bottom-right dots
+        if (num >= 2) {
+            dieDots.tl.opacity = 1;
+            dieDots.br.opacity = 1;
+        }
+        // Top-right & Bottom-left dots
+        if (num >= 4) {
+            dieDots.tr.opacity = 1;
+            dieDots.bl.opacity = 1;
+        }
+        // Middle-left & Middle-right dots (for 6)
+        if (num === 6) {
+            dieDots.ml.opacity = 1;
+            dieDots.mr.opacity = 1;
+        }
+    }
+
+    // --- Game Logic Functions ---
+    function startRound() {
+        if (currentRound >= maxRounds && rolledNumber !== 6) { // Check if game should end (excluding bonus round case)
+            // TODO: Implement game over logic
+            console.log("Game Over - Max rounds reached");
+            gameState = 'gameOver';
+            // Maybe display win/loss message
+            return;
+        }
+
+        // Increment round unless it's the start of the bonus round
+        if (roundText.text !== "Bonus Round!") { 
+            currentRound++;
+            roundText.text = `Round: ${currentRound}/${maxRounds}`;
+        }
+        console.log(`Starting Round ${currentRound} (or Bonus)`);
+        
+        rolledNumber = null;
+        drawDieFace(null); // Ensure dots are hidden at round start
+        
+        // Random spin duration (3-8 seconds)
+        const spinDuration = k.rand(3, 9);
+        console.log(`Spin duration: ${spinDuration.toFixed(1)}s`);
+        
+        // Immediately start the die roll/spin
+        startDieRoll(spinDuration);
+    }
+
+    function startDieRoll(duration: number) {
+        gameState = 'rolling';
+        console.log("Spinning die...");
+        
+        // Start the die flickering immediately
+        const rollDuration = duration; 
+        let spinTimer = 0;
+        const spinInterval = k.loop(0.05, () => {
+            spinTimer += 0.05;
+            drawDieFace(k.randi(1, 7)); // Call new function
+            
+            if (spinTimer >= rollDuration) {
+                spinInterval.cancel();
+                rolledNumber = k.randi(1, 7); 
+                console.log(`Rolled: ${rolledNumber}`);
+                drawDieFace(rolledNumber); // Call new function
+                gameState = 'checking';
+                k.wait(0.5, checkPlayerPositions);
+            }
+        });
+    }
+
+    function checkPlayerPositions() {
+        console.log("Checking player positions...");
+        // TODO: Implement logic to check player base/jail status
+        // TODO: Move players to jail if necessary
+        // TODO: Release players from jail if 6 is rolled
+        
+        // --- Placeholder Check --- 
+        if (rolledNumber === 6) {
+            console.log("Rolled 6! Releasing jail...");
+            // TODO: Add logic to find jailed players and move them
+        } else {
+            console.log(`Checking for players on base ${rolledNumber} or no base...`);
+            // TODO: Add logic to find players on wrong base/no base and move to jail
+        }
+
+        // Wait a bit, then start next round (or handle bonus/end game)
+        k.wait(1.5, () => {
+            // Handle bonus round case
+            if (currentRound === maxRounds && rolledNumber === 6) {
+                console.log("Bonus Round!");
+                // Reset round counter display for bonus? Or show "Bonus"?
+                roundText.text = "Bonus Round!";
+                // Don't actually increment currentRound past maxRounds
+                startRound(); // Start the bonus round process
+            } else if (currentRound < maxRounds) {
+                startRound();
+            } else {
+                 // Game truly over after round 10 (and not a 6)
+                 console.log("Final Check Complete - Game Over");
+                 gameState = 'gameOver';
+                 // TODO: Final win/loss check
+            }
+        });
+    }
+
+    // --- Initial Game Start ---
+    startRound(); // Start the first round when scene loads
+
     // --- Draw Arena Layout ---
 
     // Starting Zone Background
@@ -379,12 +562,12 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
 
     // P1 Forward/Backward Movement & Animation Trigger
     k.onKeyDown("up", () => {
-        const moveDir = k.Vec2.fromAngle(players["p1"].angle); // Use Vec2.fromAngle
+        const moveDir = k.Vec2.fromAngle(players["p1"].angle);
         players["p1"].move(moveDir.scale(PLAYER_SPEED));
         players["p1"].isMoving = true;
     });
     k.onKeyDown("down", () => {
-        const moveDir = k.Vec2.fromAngle(players["p1"].angle); // Use Vec2.fromAngle
+        const moveDir = k.Vec2.fromAngle(players["p1"].angle);
         players["p1"].move(moveDir.scale(-PLAYER_SPEED));
         players["p1"].isMoving = true;
     });
