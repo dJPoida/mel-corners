@@ -184,7 +184,10 @@ function spawnPlayer(k: KaboomCtx, id: string, startPos: Vec2, color: Color, isA
             lowerFoot: null as GameObj | null,
             limbOffsetY: shoulderWidth * 0.5, // Vertical offset for limbs
             footOffsetY: shoulderHeight * 0.5, // Vertical offset for feet
-            footOffsetX: shoulderWidth * 0.3 // Base horizontal offset for feet (can be 0 if centered)
+            footOffsetX: shoulderWidth * 0.3, // Base horizontal offset for feet (can be 0 if centered)
+            // AI Specific State
+            aiState: 'idle' as 'idle' | 'moving_to_base',
+            targetBaseId: null as number | null
         }
     ]);
 
@@ -384,6 +387,15 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
     function startDieRoll(duration: number) {
         gameState = 'rolling';
         console.log("Spinning die...");
+
+        // Assign targets to AI players
+        k.get("player").forEach(p => {
+            if (p.isAI && !p.isInJail) { // Only target for active AI
+                p.targetBaseId = k.randi(1, 5); // Target base 1-5 (Corrected range)
+                p.aiState = 'moving_to_base';
+                console.log(`${p.id} targeting base ${p.targetBaseId}`);
+            }
+        });
         
         // Start the die flickering immediately
         const rollDuration = duration; 
@@ -405,21 +417,58 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
 
     function checkPlayerPositions() {
         console.log("Checking player positions...");
-        // TODO: Implement logic to check player base/jail status
-        // TODO: Move players to jail if necessary
-        // TODO: Release players from jail if 6 is rolled
-        
-        // --- Placeholder Check --- 
+        if (rolledNumber === null) {
+            console.error("Checking positions but rolledNumber is null!");
+            // Optionally trigger next round immediately or handle error
+            k.wait(1.5, () => { startRound(); }); // Simple recovery: just start next round
+            return;
+        }
+
+        const allPlayers = k.get("player");
+
         if (rolledNumber === 6) {
             console.log("Rolled 6! Releasing jail...");
-            // TODO: Add logic to find jailed players and move them
+            allPlayers.forEach(p => {
+                if (p.isInJail) {
+                    releaseFromJail(p);
+                }
+            });
         } else {
             console.log(`Checking for players on base ${rolledNumber} or no base...`);
-            // TODO: Add logic to find players on wrong base/no base and move to jail
+            allPlayers.forEach(p => {
+                // Skip players already in jail
+                if (p.isInJail) return;
+                
+                // Check if player is in the game zone before checking bases
+                // (Avoids jailing players still in the start zone)
+                if (p.pos.x < GAME_ZONE_X) { 
+                    console.log(`${p.id} is safe in start zone.`);
+                    return; 
+                }
+
+                // Condition 1: Player is on the *rolled* base number
+                // Condition 2: Player is not on *any* base (currentBase is null)
+                if (p.currentBase === rolledNumber || p.currentBase === null) {
+                    console.log(`${p.id} is on base ${p.currentBase}. Rolled ${rolledNumber}.`);
+                    sendToJail(p);
+                } else {
+                    // Player is on a different base, they are safe
+                    console.log(`${p.id} is safe on base ${p.currentBase}. Rolled ${rolledNumber}.`);
+                }
+            });
         }
 
         // Wait a bit, then start next round (or handle bonus/end game)
         k.wait(1.5, () => {
+            // Reset AI state for next round
+            k.get("player").forEach(p => {
+                if (p.isAI) {
+                    p.aiState = 'idle';
+                    p.targetBaseId = null;
+                    p.isMoving = false; // Ensure animation is stopped
+                }
+            });
+
             // Handle bonus round case
             if (currentRound === maxRounds && rolledNumber === 6) {
                 console.log("Bonus Round!");
@@ -436,6 +485,39 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
                  // TODO: Final win/loss check
             }
         });
+    }
+
+    // --- Jail/Release Functions ---
+    function sendToJail(player: GameObj) {
+        if (player.isInJail) return; // Already jailed
+        
+        console.log(`Sending ${player.id} to jail!`);
+        player.isInJail = true;
+        player.currentBase = null; // No longer on a base
+        player.isMoving = false; // Stop walking animation
+        
+        // Move to a random spot within the jail boundaries
+        const jailPadding = PLAYER_SIZE; // Padding from jail edges
+        const randomX = k.rand(GAME_ZONE_X + jailPadding, GAME_ZONE_X + GAME_ZONE_WIDTH - jailPadding);
+        const randomY = k.rand(JAIL_Y + jailPadding, JAIL_Y + JAIL_HEIGHT - jailPadding);
+        player.pos = k.vec2(randomX, randomY);
+
+        // Optional: Add a visual effect or sound
+    }
+
+    function releaseFromJail(player: GameObj) {
+        if (!player.isInJail) return; // Not in jail
+
+        console.log(`Releasing ${player.id} from jail!`);
+        player.isInJail = false;
+
+        // Move back to a random spot in the player spawn area
+        const spawnAreaYStart = JAIL_HEIGHT; // Top Y of spawn area
+        const spawnAreaHeight = ARENA_HEIGHT - JAIL_HEIGHT - JAIL_HEIGHT;
+        const randomSpawnY = k.rand(spawnAreaYStart + PLAYER_SIZE / 2, spawnAreaYStart + spawnAreaHeight - PLAYER_SIZE / 2);
+        player.pos = k.vec2(START_ZONE_WIDTH / 2, randomSpawnY);
+
+        // Optional: Add visual effect or sound
     }
 
     // --- Initial Game Start ---
@@ -548,7 +630,15 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
     // Spawn AI Players
     for (let i = 0; i < numAI; i++) {
         const aiId = `ai${i + 1}`;
-        players[aiId] = spawnPlayer(k, aiId, k.vec2(playerSpawnX, currentSpawnY + PLAYER_SIZE / 2), PLAYER_COLOR_AI, true);
+        const spawnPos = k.vec2(playerSpawnX, currentSpawnY + PLAYER_SIZE / 2);
+        const aiPlayer = spawnPlayer(k, aiId, spawnPos, PLAYER_COLOR_AI, true);
+        players[aiId] = aiPlayer;
+
+        // Assign initial target immediately
+        aiPlayer.targetBaseId = k.randi(1, 5); // Target base 1-5 (Corrected range)
+        aiPlayer.aiState = 'moving_to_base';
+        console.log(`${aiId} targeting base ${aiPlayer.targetBaseId} initially.`);
+        
         currentSpawnY += PLAYER_SIZE + playerSpacing;
     }
 
@@ -659,14 +749,85 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
             }
         }
 
-        // --- Boundary Constraints ---
-        // Keep players within the screen bounds
-        p.pos.x = k.clamp(p.pos.x, PLAYER_SIZE / 2, ARENA_WIDTH - PLAYER_SIZE / 2);
-        p.pos.y = k.clamp(p.pos.y, PLAYER_SIZE / 2, ARENA_HEIGHT - PLAYER_SIZE / 2);
+        // --- AI Movement Logic ---
+        if (p.isAI && !p.isInJail && p.aiState === 'moving_to_base') {
+            const targetBaseId = p.targetBaseId;
+            if (targetBaseId === null) { // Should have a target, but safety check
+                p.aiState = 'idle'; 
+                p.isMoving = false; // Stop animation
+            } else {
+                // Move towards target base
+                const targetBase = k.get(`base${targetBaseId}`)[0];
+                if (targetBase) {
+                    const targetPos = targetBase.pos;
+                    const distanceToTarget = p.pos.dist(targetPos);
+                    const stoppingThreshold = 5; // Pixels - Stop when center is very close
 
-        // Prevent players from entering the Jail area directly (unless sent there)
-        if (!p.isInJail && p.pos.y + PLAYER_SIZE / 2 > JAIL_Y && p.pos.x > GAME_ZONE_X) {
-            p.pos.y = JAIL_Y - PLAYER_SIZE / 2;
+                    // --- New stopping condition: based on distance --- 
+                    if (distanceToTarget < stoppingThreshold) {
+                        p.aiState = 'idle';
+                        p.isMoving = false; // Stop animation
+                        p.pos = targetPos; // Optional: Snap exactly to center
+                        p.currentBase = targetBaseId; // Ensure currentBase is set correctly
+                        console.log(`${p.id} arrived at target base ${targetBaseId}`);
+                    } else {
+                        // Continue moving towards target
+                        const direction = targetPos.sub(p.pos).unit(); // Vector from player to target
+                        
+                        // --- Add instant rotation --- 
+                        p.angle = direction.angle(); // Instantly face the target direction
+                        // --- End add instant rotation ---
+
+                        // Move forward
+                        p.move(direction.scale(PLAYER_SPEED)); // New way: move directly along the calculated direction vector
+                        p.isMoving = true; // Ensure animation plays
+                    }
+                    // --- End new stopping condition ---
+
+                } else {
+                    // Target base somehow doesn't exist? Go idle.
+                    p.aiState = 'idle';
+                    p.isMoving = false;
+                }
+            }
+        }
+        // If AI becomes idle but movement keys aren't pressed (relevant if AI could be controlled)
+        if (p.aiState === 'idle' && p.isMoving && p.isAI) {
+             // Check if controlled movement stopped if AI could be controlled
+             // For now, just ensure animation stops if AI goes idle
+             p.isMoving = false;
+        }
+
+        // --- Base Overlap Check ---
+        let onBaseId: number | null = null;
+        for (let i = 1; i <= 5; i++) {
+            // k.get() returns an array, check if player overlaps the first (and only) base with that tag
+            const base = k.get(`base${i}`)[0]; 
+            if (base && p.isColliding(base)) {
+                onBaseId = i;
+                break; // Found a base, no need to check others
+            }
+        }
+        p.currentBase = onBaseId; // Update the player's state
+
+        // --- Boundary Constraints ---
+        const halfPlayer = PLAYER_SIZE / 2;
+
+        // 1. General Screen Bounds
+        p.pos.x = k.clamp(p.pos.x, halfPlayer, ARENA_WIDTH - halfPlayer);
+        p.pos.y = k.clamp(p.pos.y, halfPlayer, ARENA_HEIGHT - halfPlayer);
+
+        // 2. Jail Zone Specific Constraints
+        if (p.isInJail) {
+            // Confine player *within* jail bounds
+            p.pos.x = k.clamp(p.pos.x, GAME_ZONE_X + halfPlayer, ARENA_WIDTH - halfPlayer);
+            p.pos.y = k.clamp(p.pos.y, JAIL_Y + halfPlayer, ARENA_HEIGHT - halfPlayer);
+        } else {
+            // Prevent non-jailed players from entering jail from above/game zone
+            if (p.pos.y + halfPlayer > JAIL_Y && p.pos.x > GAME_ZONE_X) {
+                p.pos.y = JAIL_Y - halfPlayer;
+            }
+            // Optional: Could add checks to prevent entering from sides below JAIL_Y if needed
         }
     });
 
