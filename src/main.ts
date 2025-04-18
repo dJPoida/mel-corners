@@ -1,4 +1,4 @@
-import kaboom, { KaboomCtx, Color, Vec2 } from "kaboom";
+import kaboom, { KaboomCtx, Color, Vec2, GameObj } from "kaboom";
 
 // Initialize Kaboom context
 const k: KaboomCtx = kaboom({
@@ -133,12 +133,128 @@ const JAIL_Y = ARENA_HEIGHT - JAIL_HEIGHT;
 // We can recalculate playable height accurately now if needed elsewhere, but baseDist uses it
 const GAME_ZONE_PLAYABLE_HEIGHT = ARENA_HEIGHT - JAIL_HEIGHT;
 
+// Player Constants
+const PLAYER_SIZE = 32;
+const PLAYER_SPEED = 320;
+const PLAYER_ROTATION_SPEED = 250; // Slightly faster rotation (was 200)
+const PLAYER_COLOR_P1 = k.rgb(100, 100, 255); // Blue-ish
+const PLAYER_COLOR_P2 = k.rgb(100, 255, 100); // Green-ish
+const PLAYER_COLOR_AI = k.rgb(200, 200, 200); // Light Grey
+
 // Colors
 const COLOR_START_ZONE: Color = k.rgb(50, 50, 50);
 const COLOR_GAME_ZONE: Color = k.rgb(40, 40, 40);
 const COLOR_BASE: Color = k.rgb(80, 80, 150);
 const COLOR_JAIL: Color = k.rgb(150, 80, 80);
 const COLOR_TEXT: Color = k.WHITE;
+
+// Function to spawn a player
+function spawnPlayer(k: KaboomCtx, id: string, startPos: Vec2, color: Color, isAI: boolean = false) {
+    const headSize = PLAYER_SIZE * 0.6;
+    const shoulderWidth = PLAYER_SIZE;
+    const shoulderHeight = PLAYER_SIZE * 0.5;
+    const limbSize = PLAYER_SIZE * 0.2;
+    const footSize = PLAYER_SIZE * 0.25; // Slightly larger than limbs maybe?
+
+    const player = k.add([
+        k.pos(startPos),
+        k.rotate(0), // Reset initial rotation to 0 (facing right)
+        // Define area shape relative to the player's center anchor
+        k.area({ shape: new k.Rect(k.vec2(0, 0).sub(k.vec2(PLAYER_SIZE/2, PLAYER_SIZE/2)), PLAYER_SIZE, PLAYER_SIZE) }),
+        k.anchor("center"), // Main anchor for the player object itself
+        k.body({ isStatic: false }),
+        k.offscreen({ hide: true }),
+        "player",
+        id,
+        {
+            isAI: isAI,
+            isInJail: false,
+            currentBase: null,
+            isMoving: false, // Track movement state for animation
+            animTimer: 0, // Timer for animation cycle
+            topLimb: null as GameObj | null,
+            bottomLimb: null as GameObj | null,
+            upperFoot: null as GameObj | null,
+            lowerFoot: null as GameObj | null,
+            limbOffsetY: shoulderWidth * 0.5, // Vertical offset for limbs
+            footOffsetY: shoulderHeight * 0.5, // Vertical offset for feet
+            footOffsetX: shoulderWidth * 0.3 // Base horizontal offset for feet (can be 0 if centered)
+        }
+    ]);
+
+    // Add visual components as children - Draw relative to facing right (angle 0)
+    const shoulderVisualOffset = shoulderWidth * 0.15; // How far back shoulders are
+    const headVisualOffset = headSize * 0.05; // How far forward head is
+
+    // Limbs (Positioned vertically relative to center)
+    const limbOffsetY = player.limbOffsetY; // Get the offset for clarity
+    // Top Limb (was Left when facing up)
+    player.topLimb = player.add([
+        k.rect(limbSize, limbSize),
+        k.pos(0, -limbOffsetY), // Position Y above center
+        k.anchor("center"),
+        k.color(color.darken(30)),
+        k.opacity(0),
+        "limb",
+        "topLimb"
+    ]);
+    // Bottom Limb (was Right when facing up)
+    player.bottomLimb = player.add([
+        k.rect(limbSize, limbSize),
+        k.pos(0, limbOffsetY), // Position Y below center
+        k.anchor("center"),
+        k.color(color.darken(30)),
+        k.opacity(0),
+        "limb",
+        "bottomLimb"
+    ]);
+
+    // Feet (Positioned vertically symmetrical, initially hidden)
+    const footOffsetY = player.footOffsetY;
+    const footOffsetX = 0; // Start centered horizontally before animation
+
+    // Upper Foot
+    player.upperFoot = player.add([
+        k.rect(footSize, footSize),
+        k.pos(footOffsetX, -footOffsetY), // Position above center vertically
+        k.anchor("center"),
+        k.color(color.darken(40)), // Darker color for feet
+        k.opacity(0),
+        "foot",
+        "upperFoot"
+    ]);
+    // Lower Foot
+    player.lowerFoot = player.add([
+        k.rect(footSize, footSize),
+        k.pos(footOffsetX, footOffsetY), // Position below center vertically
+        k.anchor("center"),
+        k.color(color.darken(40)),
+        k.opacity(0),
+        "foot",
+        "lowerFoot"
+    ]);
+
+        // Shoulders (Vertical rectangle behind center)
+        player.add([
+            k.rect(shoulderHeight, shoulderWidth), // Flipped dimensions
+            k.pos(-shoulderVisualOffset, 0), // Position X behind center
+            k.anchor("center"),
+            k.color(color),
+            "playerShoulders"
+        ]);
+        
+        // Head (Circle ahead of center)
+        player.add([
+            k.circle(headSize / 2),
+            k.pos(headVisualOffset, 0), // Position X ahead of center
+            k.anchor("center"),
+            k.color(color.lighten(20)), // Slightly lighter color for head
+            "playerHead"
+        ]);
+    
+
+    return player;
+}
 
 // Define the game scene
 k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
@@ -216,6 +332,138 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
         k.color(COLOR_TEXT),
         k.fixed()
     ]);
+
+    // --- Spawn Players ---
+    const players: { [id: string]: GameObj } = {};
+    const playerSpawnY = ARENA_HEIGHT / 2; // Center vertically in start zone
+
+    // Spawn Player 1
+    players["p1"] = spawnPlayer(k, "p1", k.vec2(START_ZONE_WIDTH / 2, playerSpawnY - (numPlayers > 1 ? PLAYER_SIZE : 0)), PLAYER_COLOR_P1);
+
+    // Spawn Player 2 if selected
+    if (numPlayers === 2) {
+        players["p2"] = spawnPlayer(k, "p2", k.vec2(START_ZONE_WIDTH / 2, playerSpawnY + PLAYER_SIZE), PLAYER_COLOR_P2);
+    }
+
+    // --- Player Movement & Animation --- 
+
+    // P1 Rotation
+    k.onKeyDown("left", () => {
+        players["p1"].angle -= PLAYER_ROTATION_SPEED * k.dt();
+    });
+    k.onKeyDown("right", () => {
+        players["p1"].angle += PLAYER_ROTATION_SPEED * k.dt();
+    });
+
+    // P1 Forward/Backward Movement & Animation Trigger
+    k.onKeyDown("up", () => {
+        const moveDir = k.Vec2.fromAngle(players["p1"].angle); // Use Vec2.fromAngle
+        players["p1"].move(moveDir.scale(PLAYER_SPEED));
+        players["p1"].isMoving = true;
+    });
+    k.onKeyDown("down", () => {
+        const moveDir = k.Vec2.fromAngle(players["p1"].angle); // Use Vec2.fromAngle
+        players["p1"].move(moveDir.scale(-PLAYER_SPEED));
+        players["p1"].isMoving = true;
+    });
+    
+    // Stop P1 animation when movement keys released
+    const checkStopMovingP1 = () => {
+        if (!k.isKeyDown("up") && !k.isKeyDown("down")) {
+            players["p1"].isMoving = false;
+        }
+    };
+    k.onKeyRelease("up", checkStopMovingP1);
+    k.onKeyRelease("down", checkStopMovingP1);
+
+    // P2 Controls (WASD) - Only if P2 exists
+    if (numPlayers === 2) {
+        // P2 Rotation
+        k.onKeyDown("a", () => {
+            players["p2"].angle -= PLAYER_ROTATION_SPEED * k.dt();
+        });
+        k.onKeyDown("d", () => {
+            players["p2"].angle += PLAYER_ROTATION_SPEED * k.dt();
+        });
+        // P2 Forward/Backward Movement & Animation Trigger
+        k.onKeyDown("w", () => {
+            const moveDir = k.Vec2.fromAngle(players["p2"].angle);
+            players["p2"].move(moveDir.scale(PLAYER_SPEED));
+            players["p2"].isMoving = true;
+        });
+        k.onKeyDown("s", () => {
+            const moveDir = k.Vec2.fromAngle(players["p2"].angle);
+            players["p2"].move(moveDir.scale(-PLAYER_SPEED));
+            players["p2"].isMoving = true;
+        });
+        // Stop P2 animation when movement keys released
+        const checkStopMovingP2 = () => {
+            if (!k.isKeyDown("w") && !k.isKeyDown("s")) {
+                players["p2"].isMoving = false;
+            }
+        };
+        k.onKeyRelease("w", checkStopMovingP2);
+        k.onKeyRelease("s", checkStopMovingP2);
+    }
+
+    // --- Update Player Logic (Animation and Boundaries) ---
+    const animSpeed = 16; // Increase swing speed (was 8)
+    const animDist = 10; // Increase oscillation magnitude (was 5)
+
+    k.onUpdate("player", (p) => {
+        // --- Animation ---
+        const topLimb = p.topLimb;
+        const bottomLimb = p.bottomLimb;
+        const upperFoot = p.upperFoot;
+        const lowerFoot = p.lowerFoot;
+
+        if (topLimb && bottomLimb && upperFoot && lowerFoot) { // Check all limbs/feet exist
+            if (p.isMoving) {
+                p.animTimer += k.dt() * animSpeed;
+                const animOffset = Math.sin(p.animTimer) * animDist;
+
+                // Animate Limbs (X swing, fixed Y)
+                topLimb.pos.x = animOffset;
+                topLimb.pos.y = -p.limbOffsetY;
+                bottomLimb.pos.x = -animOffset;
+                bottomLimb.pos.y = p.limbOffsetY;
+
+                // Animate Feet (X swing alternating, fixed Y)
+                upperFoot.pos.x = -animOffset; // Opposite X swing to top limb
+                upperFoot.pos.y = -p.footOffsetY; // Fixed Y position (upper)
+                lowerFoot.pos.x = animOffset; // Opposite X swing to bottom limb
+                lowerFoot.pos.y = p.footOffsetY; // Fixed Y position (lower)
+
+                // Make visible
+                topLimb.opacity = 1;
+                bottomLimb.opacity = 1;
+                upperFoot.opacity = 1;
+                lowerFoot.opacity = 1;
+            } else {
+                p.animTimer = 0;
+                // Reset X position to 0
+                topLimb.pos.x = 0;
+                bottomLimb.pos.x = 0;
+                upperFoot.pos.x = 0;
+                lowerFoot.pos.x = 0;
+                // Make hidden
+                topLimb.opacity = 0;
+                bottomLimb.opacity = 0;
+                upperFoot.opacity = 0;
+                lowerFoot.opacity = 0;
+            }
+        }
+
+        // --- Boundary Constraints ---
+        // Keep players within the screen bounds
+        p.pos.x = k.clamp(p.pos.x, PLAYER_SIZE / 2, ARENA_WIDTH - PLAYER_SIZE / 2);
+        p.pos.y = k.clamp(p.pos.y, PLAYER_SIZE / 2, ARENA_HEIGHT - PLAYER_SIZE / 2);
+
+        // Prevent players from entering the Jail area directly (unless sent there)
+        if (!p.isInJail && p.pos.y + PLAYER_SIZE / 2 > JAIL_Y && p.pos.x > GAME_ZONE_X) {
+            p.pos.y = JAIL_Y - PLAYER_SIZE / 2;
+        }
+    });
 
     // --- Placeholder Info & Controls ---
     k.add([
