@@ -22,3 +22,8 @@ A simple multiplayer web game built with Kaboom.js and Vite.
     npm run build
     ```
     This will create a `dist` folder containing the optimized game files, ready for deployment. 
+
+
+## Links
+
+ - sounds generated using [sfxr.me](https://sfxr.me/)

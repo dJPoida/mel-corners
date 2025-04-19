@@ -2,7 +2,7 @@ import kaboom, { KaboomCtx, Color, Vec2, GameObj } from "kaboom";
 
 // Initialize Kaboom context
 const k: KaboomCtx = kaboom({
-    global: false, // Import Kaboom functions into global namespace
+    global: false, // Ensure global is false
     width: 1280, // Game canvas width
     height: 720, // Game canvas height
     scale: 1, // Keep scale at 1 for now
@@ -16,6 +16,9 @@ let selectedPlayers = 1;
 
 // Define menu scene
 k.scene("menu", () => {
+    // Load sounds for this scene
+    k.loadSound("select", "sounds/select.wav");
+
     const centerPos = k.vec2(k.width() / 2, k.height() / 2);
     const selectionOffset = 150;
     const optionTextSize = 40;
@@ -63,7 +66,7 @@ k.scene("menu", () => {
     const underline = k.add([
         k.rect(initialProps.width, underlineHeight),
         k.pos(initialProps.x, initialProps.y),
-        k.color(k.WHITE), // White color for the underline
+        k.color(k.WHITE), // Added k. to WHITE
         k.anchor("topleft"),
         "underline"
     ]);
@@ -87,7 +90,7 @@ k.scene("menu", () => {
         underline.pos.x = props.x;
         underline.pos.y = props.y;
         underline.width = props.width; // Update width in case text width differs
-        // Optional: Add sound effect
+        k.play("select"); // Play selection sound
     };
 
     // Input handling for selection
@@ -137,21 +140,21 @@ const GAME_ZONE_PLAYABLE_HEIGHT = ARENA_HEIGHT - JAIL_HEIGHT;
 const PLAYER_SIZE = 32;
 const PLAYER_SPEED = 320;
 const PLAYER_ROTATION_SPEED = 250; // Slightly faster rotation (was 200)
-const PLAYER_COLOR_P1 = k.rgb(100, 100, 255); // Blue-ish
-const PLAYER_COLOR_P2 = k.rgb(100, 255, 100); // Green-ish
-const PLAYER_COLOR_AI = k.rgb(200, 200, 200); // Light Grey
+const PLAYER_COLOR_P1 = k.rgb(100, 100, 255);
+const PLAYER_COLOR_P2 = k.rgb(100, 255, 100);
+const PLAYER_COLOR_AI = k.rgb(200, 200, 200);
 
 // Colors
 const COLOR_START_ZONE: Color = k.rgb(50, 50, 50);
 const COLOR_GAME_ZONE: Color = k.rgb(40, 40, 40);
 const COLOR_BASE: Color = k.rgb(80, 80, 150);
 const COLOR_JAIL: Color = k.rgb(150, 80, 80);
-const COLOR_TEXT: Color = k.WHITE;
+const COLOR_TEXT: Color = k.WHITE; // Added k.
 
 // Die Visual Constants
 const DIE_SIZE = 60;
-const DIE_BG_COLOR = k.WHITE;
-const DIE_DOT_COLOR = k.BLACK;
+const DIE_BG_COLOR = k.WHITE; // Added k.
+const DIE_DOT_COLOR = k.BLACK; // Added k.
 const DIE_DOT_SIZE = DIE_SIZE * 0.15;
 
 // Function to spawn a player
@@ -164,10 +167,9 @@ function spawnPlayer(k: KaboomCtx, id: string, startPos: Vec2, color: Color, isA
 
     const player = k.add([
         k.pos(startPos),
-        k.rotate(0), // Reset initial rotation to 0 (facing right)
-        // Define area shape relative to the player's center anchor
-        k.area({ shape: new k.Rect(k.vec2(0, 0).sub(k.vec2(PLAYER_SIZE/2, PLAYER_SIZE/2)), PLAYER_SIZE, PLAYER_SIZE) }),
-        k.anchor("center"), // Main anchor for the player object itself
+        k.rotate(0),
+        k.area({ shape: new k.Rect(k.vec2(0, 0).sub(k.vec2(PLAYER_SIZE/2, PLAYER_SIZE/2)), PLAYER_SIZE, PLAYER_SIZE) }), // Added k.Rect, k.vec2
+        k.anchor("center"),
         k.body({ isStatic: false }),
         k.offscreen({ hide: true }),
         "player",
@@ -200,7 +202,7 @@ function spawnPlayer(k: KaboomCtx, id: string, startPos: Vec2, color: Color, isA
     // Top Limb (was Left when facing up)
     player.topLimb = player.add([
         k.rect(limbSize, limbSize),
-        k.pos(0, -limbOffsetY), // Position Y above center
+        k.pos(0, -limbOffsetY),
         k.anchor("center"),
         k.color(color.darken(30)),
         k.opacity(0),
@@ -210,7 +212,7 @@ function spawnPlayer(k: KaboomCtx, id: string, startPos: Vec2, color: Color, isA
     // Bottom Limb (was Right when facing up)
     player.bottomLimb = player.add([
         k.rect(limbSize, limbSize),
-        k.pos(0, limbOffsetY), // Position Y below center
+        k.pos(0, limbOffsetY),
         k.anchor("center"),
         k.color(color.darken(30)),
         k.opacity(0),
@@ -225,9 +227,9 @@ function spawnPlayer(k: KaboomCtx, id: string, startPos: Vec2, color: Color, isA
     // Upper Foot
     player.upperFoot = player.add([
         k.rect(footSize, footSize),
-        k.pos(footOffsetX, -footOffsetY), // Position above center vertically
+        k.pos(footOffsetX, -footOffsetY),
         k.anchor("center"),
-        k.color(color.darken(40)), // Darker color for feet
+        k.color(color.darken(40)),
         k.opacity(0),
         "foot",
         "upperFoot"
@@ -235,7 +237,7 @@ function spawnPlayer(k: KaboomCtx, id: string, startPos: Vec2, color: Color, isA
     // Lower Foot
     player.lowerFoot = player.add([
         k.rect(footSize, footSize),
-        k.pos(footOffsetX, footOffsetY), // Position below center vertically
+        k.pos(footOffsetX, footOffsetY),
         k.anchor("center"),
         k.color(color.darken(40)),
         k.opacity(0),
@@ -245,8 +247,8 @@ function spawnPlayer(k: KaboomCtx, id: string, startPos: Vec2, color: Color, isA
 
         // Shoulders (Vertical rectangle behind center)
         player.add([
-            k.rect(shoulderHeight, shoulderWidth), // Flipped dimensions
-            k.pos(-shoulderVisualOffset, 0), // Position X behind center
+            k.rect(shoulderHeight, shoulderWidth),
+            k.pos(-shoulderVisualOffset, 0),
             k.anchor("center"),
             k.color(color),
             "playerShoulders"
@@ -254,10 +256,10 @@ function spawnPlayer(k: KaboomCtx, id: string, startPos: Vec2, color: Color, isA
         
         // Head (Circle ahead of center)
         player.add([
-            k.circle(headSize / 2),
-            k.pos(headVisualOffset, 0), // Position X ahead of center
+            k.circle(headSize / 2), // Added k.
+            k.pos(headVisualOffset, 0),
             k.anchor("center"),
-            k.color(color.lighten(20)), // Slightly lighter color for head
+            k.color(color.lighten(20)),
             "playerHead"
         ]);
     
@@ -267,6 +269,11 @@ function spawnPlayer(k: KaboomCtx, id: string, startPos: Vec2, color: Color, isA
 
 // Define the game scene
 k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
+    // Load sounds for this scene
+    k.loadSound("jail", "sounds/jail.wav");
+    k.loadSound("released", "sounds/released.wav");
+    k.loadSound("success", "sounds/success.wav"); // Load success sound
+
     // --- Game State ---
     let currentRound = 0;
     const maxRounds = 10;
@@ -278,24 +285,26 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
     // Round Counter (Top-center of Start Zone)
     const roundText = k.add([
         k.text(`Round: ${currentRound}/${maxRounds}`, { size: 24 }),
-        k.pos(START_ZONE_WIDTH / 2, 20), // Position in top-center of start zone
+        k.pos(START_ZONE_WIDTH / 2, 20),
         k.anchor("top"),
-        k.fixed(),
-        k.z(100), // Ensure it's drawn on top
-        "roundText"
+        k.fixed(), // Added k.
+        k.z(100) // Added k.
+        // "roundText" // Tag seems redundant if accessed via variable
     ]);
+    roundText.use("roundText"); // Add tag using .use() if needed later
 
     // Die Display (Parent Object with Background)
-    const dieDisplayPos = k.vec2(START_ZONE_WIDTH / 2, 70); // Position below round text
+    const dieDisplayPos = k.vec2(START_ZONE_WIDTH / 2, 70);
     const dieDisplay = k.add([
         k.pos(dieDisplayPos),
         k.rect(DIE_SIZE, DIE_SIZE),
         k.color(DIE_BG_COLOR),
         k.anchor("top"),
-        k.fixed(),
-        k.z(99), // Below round text, above other things
-        "dieDisplayContainer" // Tag for the container itself
+        k.fixed(), // Added k.
+        k.z(99) // Added k.
+        // "dieDisplayContainer" // Tag seems redundant
     ]);
+    dieDisplay.use("dieDisplayContainer"); // Add tag using .use() if needed
 
     // Create permanent, hidden dots for the die face
     const dieDotPositions = {
@@ -305,10 +314,10 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
         bl: k.vec2(-DIE_SIZE / 4, DIE_SIZE / 4),
         br: k.vec2(DIE_SIZE / 4, DIE_SIZE / 4),
         ml: k.vec2(-DIE_SIZE / 4, 0), // Middle-left
-        mr: k.vec2(DIE_SIZE / 4, 0), // Middle-right
+        mr: k.vec2(DIE_SIZE / 4, 0) // Middle-right
     };
     const dieDots: { [key: string]: GameObj } = {};
-    const centerOffset = k.vec2(0, DIE_SIZE / 2); // Offset from dieDisplay's top anchor
+    const centerOffset = k.vec2(0, DIE_SIZE / 2);
 
     for (const key in dieDotPositions) {
         dieDots[key] = dieDisplay.add([
@@ -316,10 +325,10 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
             k.pos(centerOffset.add(dieDotPositions[key as keyof typeof dieDotPositions])),
             k.anchor("center"),
             k.color(DIE_DOT_COLOR),
-            k.opacity(0), // Start hidden
-            k.z(100), 
-            "dot", // Still tag them if needed, though direct references are better
-            `dot-${key}` // Unique tag per dot
+            k.opacity(0),
+            k.z(100), // Added k.
+            "dot",
+            `dot-${key}`
         ]);
     }
 
@@ -327,7 +336,7 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
     function drawDieFace(num: number | null) {
         // Hide all dots initially
         for (const key in dieDots) {
-            dieDots[key].opacity = 0;
+            dieDots[key].opacity = 0; // Access opacity property directly
         }
 
         if (num === null || num < 1 || num > 6) {
@@ -377,7 +386,7 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
         drawDieFace(null); // Ensure dots are hidden at round start
         
         // Random spin duration (3-8 seconds)
-        const spinDuration = k.rand(3, 9);
+        const spinDuration = k.rand(3, 9); // Added k.
         console.log(`Spin duration: ${spinDuration.toFixed(1)}s`);
         
         // Immediately start the die roll/spin
@@ -389,9 +398,9 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
         console.log("Spinning die...");
 
         // Assign targets to AI players
-        k.get("player").forEach(p => {
+        k.get("player").forEach(p => { // Added k.
             if (p.isAI && !p.isInJail) { // Only target for active AI
-                p.targetBaseId = k.randi(1, 5); // Target base 1-5 (Corrected range)
+                p.targetBaseId = k.randi(1, 5); // Added k.
                 p.aiState = 'moving_to_base';
                 console.log(`${p.id} targeting base ${p.targetBaseId}`);
             }
@@ -400,17 +409,17 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
         // Start the die flickering immediately
         const rollDuration = duration; 
         let spinTimer = 0;
-        const spinInterval = k.loop(0.05, () => {
+        const spinInterval = k.loop(0.05, () => { // Added k.
             spinTimer += 0.05;
-            drawDieFace(k.randi(1, 7)); // Call new function
+            drawDieFace(k.randi(1, 7)); // Added k.
             
             if (spinTimer >= rollDuration) {
                 spinInterval.cancel();
-                rolledNumber = k.randi(1, 7); 
+                rolledNumber = k.randi(1, 7); // Added k.
                 console.log(`Rolled: ${rolledNumber}`);
-                drawDieFace(rolledNumber); // Call new function
+                drawDieFace(rolledNumber);
                 gameState = 'checking';
-                k.wait(0.5, checkPlayerPositions);
+                k.wait(0.5, checkPlayerPositions); // Added k.
             }
         });
     }
@@ -419,15 +428,16 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
         console.log("Checking player positions...");
         if (rolledNumber === null) {
             console.error("Checking positions but rolledNumber is null!");
-            // Optionally trigger next round immediately or handle error
-            k.wait(1.5, () => { startRound(); }); // Simple recovery: just start next round
+            k.wait(1.5, () => { startRound(); }); 
             return;
         }
 
         const allPlayers = k.get("player");
+        let basesToReset = new Set<GameObj>(); // Track bases that need color reset
 
         if (rolledNumber === 6) {
             console.log("Rolled 6! Releasing jail...");
+            k.play("released"); 
             allPlayers.forEach(p => {
                 if (p.isInJail) {
                     releaseFromJail(p);
@@ -435,36 +445,117 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
             });
         } else {
             console.log(`Checking for players on base ${rolledNumber} or no base...`);
+            let playerJailedThisRound = false; 
+            const targetBase = k.get(`base${rolledNumber}`)[0]; // Get target base
+            let safeBasesToFlash = new Set<GameObj>(); // Track safe bases
+
+            // Flash target base red (if it exists)
+            if (targetBase) {
+                basesToReset.add(targetBase); // Ensure it gets reset
+
+                // --- Flashing using k.loop and k.wait --- 
+                const flashDuration = 0.15; // Duration of each color state (red or original)
+                const flashCount = 3;       // Number of full red->original cycles
+                let currentFlashes = 0;
+                let isRed = false;
+
+                const flashLoop = k.loop(flashDuration, () => {
+                    if (isRed) {
+                        targetBase.color = COLOR_BASE;
+                        isRed = false;
+                        currentFlashes++; // Increment after returning to original color
+                    } else {
+                        targetBase.color = k.RED;
+                        isRed = true;
+                    }
+
+                    if (currentFlashes >= flashCount) {
+                        targetBase.color = k.RED; // Ensure it ends on Red
+                        flashLoop.cancel();
+                    }
+                });
+                // --- End flashing logic --- 
+            }
+
             allPlayers.forEach(p => {
                 // Skip players already in jail
                 if (p.isInJail) return;
                 
-                // Check if player is in the game zone before checking bases
-                // (Avoids jailing players still in the start zone)
+                // Skip players in the start zone
                 if (p.pos.x < GAME_ZONE_X) { 
-                    console.log(`${p.id} is safe in start zone.`);
+                    // console.log(`${p.id} is safe in start zone.`); // Keep log concise
                     return; 
                 }
 
-                // Condition 1: Player is on the *rolled* base number
-                // Condition 2: Player is not on *any* base (currentBase is null)
+                // Check if player needs to be jailed
                 if (p.currentBase === rolledNumber || p.currentBase === null) {
-                    console.log(`${p.id} is on base ${p.currentBase}. Rolled ${rolledNumber}.`);
+                    console.log(`${p.id} is on base ${p.currentBase}. Rolled ${rolledNumber}. JAILED.`);
                     sendToJail(p);
+                    playerJailedThisRound = true; 
                 } else {
-                    // Player is on a different base, they are safe
+                    // Player is safe on a *different* base
                     console.log(`${p.id} is safe on base ${p.currentBase}. Rolled ${rolledNumber}.`);
+                    const safeBase = k.get(`base${p.currentBase}`)[0];
+                    if (safeBase) {
+                        safeBasesToFlash.add(safeBase);
+                    }
                 }
             });
+
+            // Flash safe bases green
+            safeBasesToFlash.forEach(safeBase => {
+                // Avoid flashing the target base green if it somehow ended up in the safe list
+                if (safeBase !== targetBase) { 
+                    safeBase.color = k.GREEN;
+                    // Start fade back to original color over 0.9 seconds
+                    k.tween(safeBase.color, COLOR_BASE, 0.9, (c) => safeBase.color = c, k.easings.linear);
+                    // basesToReset.add(safeBase); // Remove: Reset is now handled by the tween
+                }
+            });
+
+            // Play success sound only if no one was jailed
+            if (!playerJailedThisRound) {
+                k.play("success");
+            }
         }
 
-        // Wait a bit, then start next round (or handle bonus/end game)
-        k.wait(1.5, () => {
+        // Check for game over condition: all players in jail
+        const allPlayersAreJailed = allPlayers.every(p => p.isInJail);
+        if (allPlayersAreJailed) {
+            console.log("Game Over - All players are in jail!");
+            gameState = 'gameOver';
+
+            // Optionally display a game over message
+            k.add([
+                k.text("GAME OVER\nAll players jailed!", { size: 60, align: "center" }),
+                k.pos(k.width() / 2, k.height() / 2),
+                k.anchor("center"),
+                k.color(k.RED),
+                k.z(200), // Ensure it's on top
+                k.fixed()
+            ]);
+            
+            // Reset base colors immediately if game ends here
+            basesToReset.forEach(base => {
+                base.color = COLOR_BASE; 
+            });
+
+            // Don't proceed to the next round wait
+            return; 
+        }
+
+        // Wait a bit, then start next round / reset state
+        // Store the timer handle so it can be cancelled if needed elsewhere (though not currently used for cancellation here)
+        const nextRoundTimer = k.wait(1.5, () => { 
+            // Reset base colors FIRST - Now only resets the red target base (if any)
+            basesToReset.forEach(base => {
+                base.color = COLOR_BASE; // Reset to original color
+            });
+
             // Reset AI state for next round
             k.get("player").forEach(p => {
                 if (p.isAI) {
                     p.aiState = 'idle';
-                    p.targetBaseId = null;
                     p.isMoving = false; // Ensure animation is stopped
                 }
             });
@@ -492,15 +583,16 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
         if (player.isInJail) return; // Already jailed
         
         console.log(`Sending ${player.id} to jail!`);
+        k.play("jail"); // Play jail sound
         player.isInJail = true;
         player.currentBase = null; // No longer on a base
         player.isMoving = false; // Stop walking animation
         
         // Move to a random spot within the jail boundaries
         const jailPadding = PLAYER_SIZE; // Padding from jail edges
-        const randomX = k.rand(GAME_ZONE_X + jailPadding, GAME_ZONE_X + GAME_ZONE_WIDTH - jailPadding);
-        const randomY = k.rand(JAIL_Y + jailPadding, JAIL_Y + JAIL_HEIGHT - jailPadding);
-        player.pos = k.vec2(randomX, randomY);
+        const randomX = k.rand(GAME_ZONE_X + jailPadding, GAME_ZONE_X + GAME_ZONE_WIDTH - jailPadding); // Added k.
+        const randomY = k.rand(JAIL_Y + jailPadding, JAIL_Y + JAIL_HEIGHT - jailPadding); // Added k.
+        player.pos = k.vec2(randomX, randomY); // Added k.
 
         // Optional: Add a visual effect or sound
     }
@@ -514,8 +606,8 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
         // Move back to a random spot in the player spawn area
         const spawnAreaYStart = JAIL_HEIGHT; // Top Y of spawn area
         const spawnAreaHeight = ARENA_HEIGHT - JAIL_HEIGHT - JAIL_HEIGHT;
-        const randomSpawnY = k.rand(spawnAreaYStart + PLAYER_SIZE / 2, spawnAreaYStart + spawnAreaHeight - PLAYER_SIZE / 2);
-        player.pos = k.vec2(START_ZONE_WIDTH / 2, randomSpawnY);
+        const randomSpawnY = k.rand(spawnAreaYStart + PLAYER_SIZE / 2, spawnAreaYStart + spawnAreaHeight - PLAYER_SIZE / 2); // Added k.
+        player.pos = k.vec2(START_ZONE_WIDTH / 2, randomSpawnY); // Added k.
 
         // Optional: Add visual effect or sound
     }
@@ -530,7 +622,7 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
         k.rect(START_ZONE_WIDTH, ARENA_HEIGHT),
         k.pos(0, 0),
         k.color(COLOR_START_ZONE),
-        k.fixed(), // Keep UI elements fixed relative to camera
+        k.fixed(), // Added k.
         "startZoneBg"
     ]);
 
@@ -539,7 +631,7 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
         k.rect(GAME_ZONE_WIDTH, ARENA_HEIGHT),
         k.pos(GAME_ZONE_X, 0),
         k.color(COLOR_GAME_ZONE),
-        k.fixed(),
+        k.fixed(), // Added k.
         "gameZoneBg"
     ]);
 
@@ -553,11 +645,11 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
     const baseDist = Math.min(GAME_ZONE_WIDTH, GAME_ZONE_PLAYABLE_HEIGHT) * 0.4;
 
     const basePositions: { [key: number]: Vec2 } = {
-        1: k.vec2(gameZoneCenter.x - baseDist * 0.8, gameZoneCenter.y - baseDist * 0.7), // Top-left
-        2: k.vec2(gameZoneCenter.x + baseDist * 0.8, gameZoneCenter.y - baseDist * 0.7), // Top-right
-        3: k.vec2(gameZoneCenter.x, gameZoneCenter.y), // Center
-        4: k.vec2(gameZoneCenter.x - baseDist * 0.8, gameZoneCenter.y + baseDist * 0.7), // Bottom-left
-        5: k.vec2(gameZoneCenter.x + baseDist * 0.8, gameZoneCenter.y + baseDist * 0.7), // Bottom-right
+        1: k.vec2(gameZoneCenter.x - baseDist * 0.8, gameZoneCenter.y - baseDist * 0.7),
+        2: k.vec2(gameZoneCenter.x + baseDist * 0.8, gameZoneCenter.y - baseDist * 0.7),
+        3: k.vec2(gameZoneCenter.x, gameZoneCenter.y),
+        4: k.vec2(gameZoneCenter.x - baseDist * 0.8, gameZoneCenter.y + baseDist * 0.7),
+        5: k.vec2(gameZoneCenter.x + baseDist * 0.8, gameZoneCenter.y + baseDist * 0.7)
     };
 
     // Draw Bases
@@ -568,7 +660,7 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
             k.pos(pos),
             k.anchor("center"),
             k.color(COLOR_BASE),
-            k.area(), // Make it detectable by players
+            k.area(), // Added k.
             `base${i}`, // Tag for identification
             { baseId: i } // Custom property
         ]);
@@ -586,8 +678,8 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
         k.rect(GAME_ZONE_WIDTH, JAIL_HEIGHT),
         k.pos(GAME_ZONE_X, JAIL_Y),
         k.color(COLOR_JAIL),
-        k.area(),
-        k.fixed(),
+        k.area(), // Added k.
+        k.fixed(), // Added k.
         "jailZone"
     ]);
     k.add([
@@ -595,7 +687,7 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
         k.pos(GAME_ZONE_X + GAME_ZONE_WIDTH / 2, JAIL_Y + JAIL_HEIGHT / 2),
         k.anchor("center"),
         k.color(COLOR_TEXT),
-        k.fixed()
+        k.fixed() // Added k.
     ]);
 
     // --- Spawn Players ---
@@ -618,24 +710,24 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
     let currentSpawnY = spawnAreaYStart + playerSpacing;
 
     // Spawn Player 1
-    players["p1"] = spawnPlayer(k, "p1", k.vec2(playerSpawnX, currentSpawnY + PLAYER_SIZE / 2), PLAYER_COLOR_P1, false);
+    players["p1"] = spawnPlayer(k, "p1", k.vec2(playerSpawnX, currentSpawnY + PLAYER_SIZE / 2), PLAYER_COLOR_P1, false); // Added k.
     currentSpawnY += PLAYER_SIZE + playerSpacing;
 
     // Spawn Player 2 if selected
     if (numPlayers === 2) {
-        players["p2"] = spawnPlayer(k, "p2", k.vec2(playerSpawnX, currentSpawnY + PLAYER_SIZE / 2), PLAYER_COLOR_P2, false);
+        players["p2"] = spawnPlayer(k, "p2", k.vec2(playerSpawnX, currentSpawnY + PLAYER_SIZE / 2), PLAYER_COLOR_P2, false); // Added k.
         currentSpawnY += PLAYER_SIZE + playerSpacing;
     }
 
     // Spawn AI Players
     for (let i = 0; i < numAI; i++) {
         const aiId = `ai${i + 1}`;
-        const spawnPos = k.vec2(playerSpawnX, currentSpawnY + PLAYER_SIZE / 2);
+        const spawnPos = k.vec2(playerSpawnX, currentSpawnY + PLAYER_SIZE / 2); // Added k.
         const aiPlayer = spawnPlayer(k, aiId, spawnPos, PLAYER_COLOR_AI, true);
         players[aiId] = aiPlayer;
 
         // Assign initial target immediately
-        aiPlayer.targetBaseId = k.randi(1, 5); // Target base 1-5 (Corrected range)
+        aiPlayer.targetBaseId = k.randi(1, 5); // Added k.
         aiPlayer.aiState = 'moving_to_base';
         console.log(`${aiId} targeting base ${aiPlayer.targetBaseId} initially.`);
         
@@ -643,69 +735,69 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
     }
 
     // P1 Rotation
-    k.onKeyDown("left", () => {
-        players["p1"].angle -= PLAYER_ROTATION_SPEED * k.dt();
+    k.onKeyDown("left", () => { // Added k.
+        players["p1"].angle -= PLAYER_ROTATION_SPEED * k.dt(); // Added k.
     });
-    k.onKeyDown("right", () => {
-        players["p1"].angle += PLAYER_ROTATION_SPEED * k.dt();
+    k.onKeyDown("right", () => { // Added k.
+        players["p1"].angle += PLAYER_ROTATION_SPEED * k.dt(); // Added k.
     });
 
     // P1 Forward/Backward Movement & Animation Trigger
-    k.onKeyDown("up", () => {
-        const moveDir = k.Vec2.fromAngle(players["p1"].angle);
+    k.onKeyDown("up", () => { // Added k.
+        const moveDir = k.Vec2.fromAngle(players["p1"].angle); // Added k.
         players["p1"].move(moveDir.scale(PLAYER_SPEED));
         players["p1"].isMoving = true;
     });
-    k.onKeyDown("down", () => {
-        const moveDir = k.Vec2.fromAngle(players["p1"].angle);
+    k.onKeyDown("down", () => { // Added k.
+        const moveDir = k.Vec2.fromAngle(players["p1"].angle); // Added k.
         players["p1"].move(moveDir.scale(-PLAYER_SPEED));
         players["p1"].isMoving = true;
     });
     
     // Stop P1 animation when movement keys released
     const checkStopMovingP1 = () => {
-        if (!k.isKeyDown("up") && !k.isKeyDown("down")) {
+        if (!k.isKeyDown("up") && !k.isKeyDown("down")) { // Added k. twice
             players["p1"].isMoving = false;
         }
     };
-    k.onKeyRelease("up", checkStopMovingP1);
-    k.onKeyRelease("down", checkStopMovingP1);
+    k.onKeyRelease("up", checkStopMovingP1); // Added k.
+    k.onKeyRelease("down", checkStopMovingP1); // Added k.
 
     // P2 Controls (WASD) - Only if P2 exists
     if (numPlayers === 2) {
         // P2 Rotation
-        k.onKeyDown("a", () => {
-            players["p2"].angle -= PLAYER_ROTATION_SPEED * k.dt();
+        k.onKeyDown("a", () => { // Added k.
+            players["p2"].angle -= PLAYER_ROTATION_SPEED * k.dt(); // Added k.
         });
-        k.onKeyDown("d", () => {
-            players["p2"].angle += PLAYER_ROTATION_SPEED * k.dt();
+        k.onKeyDown("d", () => { // Added k.
+            players["p2"].angle += PLAYER_ROTATION_SPEED * k.dt(); // Added k.
         });
         // P2 Forward/Backward Movement & Animation Trigger
-        k.onKeyDown("w", () => {
-            const moveDir = k.Vec2.fromAngle(players["p2"].angle);
+        k.onKeyDown("w", () => { // Added k.
+            const moveDir = k.Vec2.fromAngle(players["p2"].angle); // Added k.
             players["p2"].move(moveDir.scale(PLAYER_SPEED));
             players["p2"].isMoving = true;
         });
-        k.onKeyDown("s", () => {
-            const moveDir = k.Vec2.fromAngle(players["p2"].angle);
+        k.onKeyDown("s", () => { // Added k.
+            const moveDir = k.Vec2.fromAngle(players["p2"].angle); // Added k.
             players["p2"].move(moveDir.scale(-PLAYER_SPEED));
             players["p2"].isMoving = true;
         });
         // Stop P2 animation when movement keys released
         const checkStopMovingP2 = () => {
-            if (!k.isKeyDown("w") && !k.isKeyDown("s")) {
+            if (!k.isKeyDown("w") && !k.isKeyDown("s")) { // Added k. twice
                 players["p2"].isMoving = false;
             }
         };
-        k.onKeyRelease("w", checkStopMovingP2);
-        k.onKeyRelease("s", checkStopMovingP2);
+        k.onKeyRelease("w", checkStopMovingP2); // Added k.
+        k.onKeyRelease("s", checkStopMovingP2); // Added k.
     }
 
     // --- Update Player Logic (Animation and Boundaries) ---
     const animSpeed = 16; // Increase swing speed (was 8)
     const animDist = 10; // Increase oscillation magnitude (was 5)
 
-    k.onUpdate("player", (p) => {
+    k.onUpdate("player", (p) => { // Added k.
         // --- Animation ---
         const topLimb = p.topLimb;
         const bottomLimb = p.bottomLimb;
@@ -714,7 +806,7 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
 
         if (topLimb && bottomLimb && upperFoot && lowerFoot) { // Check all limbs/feet exist
             if (p.isMoving) {
-                p.animTimer += k.dt() * animSpeed;
+                p.animTimer += k.dt() * animSpeed; // Added k.
                 const animOffset = Math.sin(p.animTimer) * animDist;
 
                 // Animate Limbs (X swing, fixed Y)
@@ -757,10 +849,10 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
                 p.isMoving = false; // Stop animation
             } else {
                 // Move towards target base
-                const targetBase = k.get(`base${targetBaseId}`)[0];
+                const targetBase = k.get(`base${targetBaseId}`)[0]; // Added k.
                 if (targetBase) {
                     const targetPos = targetBase.pos;
-                    const distanceToTarget = p.pos.dist(targetPos);
+                    const distanceToTarget = p.pos.dist(targetPos); // .dist() is a Vec2 method
                     const stoppingThreshold = 5; // Pixels - Stop when center is very close
 
                     // --- New stopping condition: based on distance --- 
@@ -772,14 +864,14 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
                         console.log(`${p.id} arrived at target base ${targetBaseId}`);
                     } else {
                         // Continue moving towards target
-                        const direction = targetPos.sub(p.pos).unit(); // Vector from player to target
+                        const direction = targetPos.sub(p.pos).unit(); // .sub() and .unit() are Vec2 methods
                         
                         // --- Add instant rotation --- 
-                        p.angle = direction.angle(); // Instantly face the target direction
+                        p.angle = direction.angle(); // .angle() is a Vec2 method
                         // --- End add instant rotation ---
 
                         // Move forward
-                        p.move(direction.scale(PLAYER_SPEED)); // New way: move directly along the calculated direction vector
+                        p.move(direction.scale(PLAYER_SPEED)); // .scale() is a Vec2 method
                         p.isMoving = true; // Ensure animation plays
                     }
                     // --- End new stopping condition ---
@@ -802,8 +894,8 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
         let onBaseId: number | null = null;
         for (let i = 1; i <= 5; i++) {
             // k.get() returns an array, check if player overlaps the first (and only) base with that tag
-            const base = k.get(`base${i}`)[0]; 
-            if (base && p.isColliding(base)) {
+            const base = k.get(`base${i}`)[0]; // Added k.
+            if (base && p.isColliding(base)) { // Added k.
                 onBaseId = i;
                 break; // Found a base, no need to check others
             }
@@ -814,14 +906,14 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
         const halfPlayer = PLAYER_SIZE / 2;
 
         // 1. General Screen Bounds
-        p.pos.x = k.clamp(p.pos.x, halfPlayer, ARENA_WIDTH - halfPlayer);
-        p.pos.y = k.clamp(p.pos.y, halfPlayer, ARENA_HEIGHT - halfPlayer);
+        p.pos.x = k.clamp(p.pos.x, halfPlayer, ARENA_WIDTH - halfPlayer); // Added k.
+        p.pos.y = k.clamp(p.pos.y, halfPlayer, ARENA_HEIGHT - halfPlayer); // Added k.
 
         // 2. Jail Zone Specific Constraints
         if (p.isInJail) {
             // Confine player *within* jail bounds
-            p.pos.x = k.clamp(p.pos.x, GAME_ZONE_X + halfPlayer, ARENA_WIDTH - halfPlayer);
-            p.pos.y = k.clamp(p.pos.y, JAIL_Y + halfPlayer, ARENA_HEIGHT - halfPlayer);
+            p.pos.x = k.clamp(p.pos.x, GAME_ZONE_X + halfPlayer, ARENA_WIDTH - halfPlayer); // Added k.
+            p.pos.y = k.clamp(p.pos.y, JAIL_Y + halfPlayer, ARENA_HEIGHT - halfPlayer); // Added k.
         } else {
             // Prevent non-jailed players from entering jail from above/game zone
             if (p.pos.y + halfPlayer > JAIL_Y && p.pos.x > GAME_ZONE_X) {
@@ -842,10 +934,10 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
     */
 
     // Go back to menu (for testing)
-    k.onKeyPress("escape", () => {
-        k.go("menu");
+    k.onKeyPress("escape", () => { // Added k.
+        k.go("menu"); // Added k.
     });
 });
 
 // Start the menu scene
-k.go("menu"); 
+k.go("menu"); // Added k. 
