@@ -272,7 +272,9 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
     // Load sounds for this scene
     k.loadSound("jail", "sounds/jail.wav");
     k.loadSound("released", "sounds/released.wav");
-    k.loadSound("success", "sounds/success.wav"); // Load success sound
+    k.loadSound("success", "sounds/success.wav");
+    k.loadSound("die1", "sounds/die_1.wav"); // Load die sound 1
+    k.loadSound("die2", "sounds/die_2.wav"); // Load die sound 2
 
     // --- Game State ---
     let currentRound = 0;
@@ -398,30 +400,66 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
         console.log("Spinning die...");
 
         // Assign targets to AI players
-        k.get("player").forEach(p => { // Added k.
-            if (p.isAI && !p.isInJail) { // Only target for active AI
-                p.targetBaseId = k.randi(1, 5); // Added k.
+        k.get("player").forEach(p => {
+            if (p.isAI && !p.isInJail) { 
+                p.targetBaseId = k.randi(1, 5); 
                 p.aiState = 'moving_to_base';
                 console.log(`${p.id} targeting base ${p.targetBaseId}`);
             }
         });
         
-        // Start the die flickering immediately
         const rollDuration = duration; 
         let spinTimer = 0;
-        const spinInterval = k.loop(0.05, () => { // Added k.
-            spinTimer += 0.05;
-            drawDieFace(k.randi(1, 7)); // Added k.
-            
+        
+        // Sound Setup
+        const soundPattern = ["die1", "die1", "die2", "die1", "die1", "die1", "die2", "die1"];
+        let soundPatternIndex = 0;
+        const dieRollVolume = 0.6; 
+        const minSoundInterval = 0.08; 
+        const maxSoundInterval = 0.4;  
+        let soundWaitHandle: any = null; 
+        let previousFlickerNumber: number | null = null; // Track last shown flicker number
+
+        // Recursive Sound and Visual Update Function
+        function playSoundAndVisual(intervalWaited: number) {
+            // Increment timer by the time we just waited
+            spinTimer += intervalWaited;
+
+            // Check if roll duration is over
             if (spinTimer >= rollDuration) {
-                spinInterval.cancel();
-                rolledNumber = k.randi(1, 7); // Added k.
+                // Determine final roll
+                rolledNumber = k.randi(1, 7); 
                 console.log(`Rolled: ${rolledNumber}`);
-                drawDieFace(rolledNumber);
+                drawDieFace(rolledNumber); // Show final face
                 gameState = 'checking';
-                k.wait(0.5, checkPlayerPositions); // Added k.
+                k.wait(0.5, checkPlayerPositions);
+                soundWaitHandle = null; // Clear handle
+                return; // Stop recursion
             }
-        });
+
+            // Update visuals (flicker) - Ensure new number is different
+            let newFlickerNumber = k.randi(1, 7);
+            while (newFlickerNumber === previousFlickerNumber) {
+                newFlickerNumber = k.randi(1, 7);
+            }
+            drawDieFace(newFlickerNumber);
+            previousFlickerNumber = newFlickerNumber; // Store the new number
+
+            // Play current sound
+            k.play(soundPattern[soundPatternIndex], { volume: dieRollVolume });
+            soundPatternIndex = (soundPatternIndex + 1) % soundPattern.length;
+
+            // Calculate progress (0 to 1)
+            const progress = k.clamp(spinTimer / rollDuration, 0, 1);
+            // Calculate next interval (linear interpolation)
+            const nextInterval = minSoundInterval + (maxSoundInterval - minSoundInterval) * progress;
+
+            // Schedule the next sound/visual update
+            soundWaitHandle = k.wait(nextInterval, () => playSoundAndVisual(nextInterval)); // Pass the interval we WILL wait
+        }
+
+        // Start the Sound/Visual Loop
+        playSoundAndVisual(0); // Initial call, waited 0 seconds
     }
 
     function checkPlayerPositions() {
@@ -433,11 +471,44 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
         }
 
         const allPlayers = k.get("player");
-        let basesToReset = new Set<GameObj>(); // Track bases that need color reset
+        // Store [object, originalColor] pairs
+        let objectsToReset = new Set<[GameObj, Color]>(); 
 
         if (rolledNumber === 6) {
             console.log("Rolled 6! Releasing jail...");
             k.play("released"); 
+
+            const jailZone = k.get("jailZone")[0];
+            const isAnyoneInJail = allPlayers.some(p => p.isInJail);
+            const flashColor = isAnyoneInJail ? k.GREEN : k.RED;
+
+            // Flash Jail Zone
+            if (jailZone) {
+                objectsToReset.add([jailZone, COLOR_JAIL]); // Store with original color
+                // Start flashing animation for jail
+                const flashDuration = 0.15; 
+                const flashCount = 3;      
+                let currentFlashes = 0;
+                let isFlashColor = false;
+
+                const jailFlashLoop = k.loop(flashDuration, () => {
+                    if (isFlashColor) {
+                        jailZone.color = COLOR_JAIL; // Use original jail color
+                        isFlashColor = false;
+                        currentFlashes++; 
+                    } else {
+                        jailZone.color = flashColor; // Use determined flash color (RED/GREEN)
+                        isFlashColor = true;
+                    }
+
+                    if (currentFlashes >= flashCount) {
+                        jailZone.color = flashColor; // End on flash color
+                        jailFlashLoop.cancel();
+                    }
+                });
+            }
+            
+            // Release players (after setting up flash)
             allPlayers.forEach(p => {
                 if (p.isInJail) {
                     releaseFromJail(p);
@@ -446,16 +517,15 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
         } else {
             console.log(`Checking for players on base ${rolledNumber} or no base...`);
             let playerJailedThisRound = false; 
-            const targetBase = k.get(`base${rolledNumber}`)[0]; // Get target base
-            let safeBasesToFlash = new Set<GameObj>(); // Track safe bases
+            const targetBase = k.get(`base${rolledNumber}`)[0]; 
+            let safeBasesToFlash = new Set<GameObj>(); 
 
-            // Flash target base red (if it exists)
+            // Flash target base red 
             if (targetBase) {
-                basesToReset.add(targetBase); // Ensure it gets reset
-
-                // --- Flashing using k.loop and k.wait --- 
-                const flashDuration = 0.15; // Duration of each color state (red or original)
-                const flashCount = 3;       // Number of full red->original cycles
+                objectsToReset.add([targetBase, COLOR_BASE]); // Store with original color
+                // Flashing using k.loop and k.wait 
+                const flashDuration = 0.15; 
+                const flashCount = 3;      
                 let currentFlashes = 0;
                 let isRed = false;
 
@@ -463,18 +533,17 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
                     if (isRed) {
                         targetBase.color = COLOR_BASE;
                         isRed = false;
-                        currentFlashes++; // Increment after returning to original color
+                        currentFlashes++; 
                     } else {
                         targetBase.color = k.RED;
                         isRed = true;
                     }
 
                     if (currentFlashes >= flashCount) {
-                        targetBase.color = k.RED; // Ensure it ends on Red
+                        targetBase.color = k.RED; 
                         flashLoop.cancel();
                     }
                 });
-                // --- End flashing logic --- 
             }
 
             allPlayers.forEach(p => {
@@ -502,57 +571,48 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
                 }
             });
 
-            // Flash safe bases green
+            // Flash safe bases green (using tween fade)
             safeBasesToFlash.forEach(safeBase => {
-                // Avoid flashing the target base green if it somehow ended up in the safe list
                 if (safeBase !== targetBase) { 
                     safeBase.color = k.GREEN;
-                    // Start fade back to original color over 0.9 seconds
                     k.tween(safeBase.color, COLOR_BASE, 0.9, (c) => safeBase.color = c, k.easings.linear);
-                    // basesToReset.add(safeBase); // Remove: Reset is now handled by the tween
                 }
             });
 
-            // Play success sound only if no one was jailed
+            // Play success sound
             if (!playerJailedThisRound) {
                 k.play("success");
             }
         }
 
-        // Check for game over condition: all players in jail
+        // Check for game over condition
         const allPlayersAreJailed = allPlayers.every(p => p.isInJail);
         if (allPlayersAreJailed) {
             console.log("Game Over - All players are in jail!");
             gameState = 'gameOver';
-
-            // Optionally display a game over message
             k.add([
                 k.text("GAME OVER\nAll players jailed!", { size: 60, align: "center" }),
                 k.pos(k.width() / 2, k.height() / 2),
                 k.anchor("center"),
                 k.color(k.RED),
-                k.z(200), // Ensure it's on top
+                k.z(200),
                 k.fixed()
             ]);
-            
-            // Reset base colors immediately if game ends here
-            basesToReset.forEach(base => {
-                base.color = COLOR_BASE; 
+            // Reset colors immediately if game ends here
+            objectsToReset.forEach(([obj, originalColor]) => {
+                obj.color = originalColor; 
             });
-
-            // Don't proceed to the next round wait
             return; 
         }
 
         // Wait a bit, then start next round / reset state
-        // Store the timer handle so it can be cancelled if needed elsewhere (though not currently used for cancellation here)
         const nextRoundTimer = k.wait(1.5, () => { 
-            // Reset base colors FIRST - Now only resets the red target base (if any)
-            basesToReset.forEach(base => {
-                base.color = COLOR_BASE; // Reset to original color
+            // Reset colors from the set using their original colors
+            objectsToReset.forEach(([obj, originalColor]) => {
+                obj.color = originalColor; 
             });
 
-            // Reset AI state for next round
+            // Reset AI state
             k.get("player").forEach(p => {
                 if (p.isAI) {
                     p.aiState = 'idle';
