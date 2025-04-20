@@ -25,6 +25,53 @@ k.scene("menu", () => {
     const underlineHeight = 4;
     const underlinePadding = 10; // Padding below text
 
+    // --- Key Drawing Constants ---
+    const KEY_SIZE = 40;
+    const KEY_SPACING = 5;
+    const KEY_COLOR = k.rgb(80, 80, 80); // Dark grey keys
+    const KEY_TEXT_COLOR = k.WHITE;
+    const KEY_GROUP_Y_OFFSET = -80; // How far above the player text
+
+    // --- Reusable Key Drawing Function ---
+    function drawKeyGroup(groupCenterPos: Vec2, keys: { up: string, down: string, left: string, right: string }) {
+        // Calculate Y positions
+        const upY = groupCenterPos.y - KEY_SIZE / 2 - KEY_SPACING / 2;
+        const downY = groupCenterPos.y + KEY_SIZE / 2 + KEY_SPACING / 2;
+        
+        // Calculate X positions relative to center
+        const centerX = groupCenterPos.x;
+        const horizontalOffset = KEY_SIZE + KEY_SPACING; // Distance from center key to side keys
+
+        const keyPositions = {
+            up: k.vec2(centerX, upY),
+            down: k.vec2(centerX, downY),
+            left: k.vec2(centerX - horizontalOffset, downY), // Position left based on center
+            right: k.vec2(centerX + horizontalOffset, downY)  // Position right based on center
+        };
+
+        // Helper to add a single key
+        const addKey = (pos: Vec2, label: string) => {
+            k.add([
+                k.rect(KEY_SIZE, KEY_SIZE, { radius: 4 }), // Slightly rounded corners
+                k.pos(pos),
+                k.anchor("center"),
+                k.color(KEY_COLOR),
+            ]);
+            k.add([
+                k.text(label, { size: KEY_SIZE * 0.5 }),
+                k.pos(pos),
+                k.anchor("center"),
+                k.color(KEY_TEXT_COLOR),
+                k.z(1) // Ensure text is above key rect
+            ]);
+        };
+
+        addKey(keyPositions.up, keys.up);
+        addKey(keyPositions.down, keys.down);
+        addKey(keyPositions.left, keys.left);
+        addKey(keyPositions.right, keys.right);
+    }
+
     // Title
     k.add([
         k.text("Corners", { size: 80 }),
@@ -47,6 +94,13 @@ k.scene("menu", () => {
         k.pos(p2Pos),
         k.anchor("center")
     ]);
+
+    // --- Draw Key Groups ---
+    const p1KeyPos = p1Pos.add(0, KEY_GROUP_Y_OFFSET);
+    drawKeyGroup(p1KeyPos, { up: "↑", down: "↓", left: "←", right: "→" });
+
+    const p2KeyPos = p2Pos.add(0, KEY_GROUP_Y_OFFSET);
+    drawKeyGroup(p2KeyPos, { up: "W", down: "S", left: "A", right: "D" });
 
     // Calculate initial underline position and width based on selected option
     const getUnderlineProps = (numPlayers: number) => {
@@ -275,6 +329,7 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
     k.loadSound("success", "sounds/success.wav");
     k.loadSound("die1", "sounds/die_1.wav"); // Load die sound 1
     k.loadSound("die2", "sounds/die_2.wav"); // Load die sound 2
+    k.loadSound("timer", "sounds/timer.wav"); // Load countdown timer sound
 
     // --- Game State ---
     let currentRound = 0;
@@ -334,6 +389,19 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
         ]);
     }
 
+    // Calculate center X of the game zone
+    const gameZoneCenterX = GAME_ZONE_X + GAME_ZONE_WIDTH / 2;
+
+    const countdownText = k.add([
+        k.text("", { size: 120 }), 
+        k.pos(gameZoneCenterX, k.height() / 2), // Centered in game zone horizontally
+        k.anchor("center"),
+        k.color(k.WHITE),
+        k.opacity(0), // Initially hidden
+        k.z(200), // On top
+        k.fixed()
+    ]);
+
     // --- Helper Function to Draw Die Face ---
     function drawDieFace(num: number | null) {
         // Hide all dots initially
@@ -385,18 +453,34 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
         console.log(`Starting Round ${currentRound} (or Bonus)`);
         
         rolledNumber = null;
-        drawDieFace(null); // Ensure dots are hidden at round start
+        drawDieFace(null); // Clear die face
         
-        // Random spin duration (3-8 seconds)
-        const spinDuration = k.rand(3, 9); // Added k.
-        console.log(`Spin duration: ${spinDuration.toFixed(1)}s`);
-        
-        // Immediately start the die roll/spin
-        startDieRoll(spinDuration);
+        // Calculate spin duration *before* countdown
+        const spinDuration = k.rand(3, 9);
+        console.log(`Countdown starting... (Spin duration will be: ${spinDuration.toFixed(1)}s)`);
+
+        gameState = 'countdown'; // Set state to countdown
+        countdownText.opacity = 1; // Make text visible
+
+        // Countdown function
+        function doCountdown(count: number) {
+            if (count <= 0) {
+                countdownText.opacity = 0; // Hide text
+                startDieRoll(spinDuration); // Start the roll
+                return;
+            }
+            
+            countdownText.text = String(count);
+            k.play("timer");
+            k.wait(1, () => doCountdown(count - 1));
+        }
+
+        // Start the countdown
+        doCountdown(3);
     }
 
     function startDieRoll(duration: number) {
-        gameState = 'rolling';
+        gameState = 'rolling'; // Set state to rolling *now*
         console.log("Spinning die...");
 
         // Assign targets to AI players
@@ -507,6 +591,19 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
                     }
                 });
             }
+
+            // Show JAILBREAK! text only if players are released
+            if (isAnyoneInJail) {
+                const jailbreakText = k.add([
+                    k.text("JAILBREAK!", { size: 80 }),
+                    k.pos(gameZoneCenterX, k.height() / 2 - 150), // Centered in game zone horizontally, offset vertically
+                    k.anchor("center"),
+                    k.color(k.GREEN),
+                    k.z(201), // Above countdown/other text
+                    k.fixed(),
+                    k.lifespan(1.0) // Automatically destroy after 1 second
+                ]);
+            }
             
             // Release players (after setting up flash)
             allPlayers.forEach(p => {
@@ -592,7 +689,7 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
             gameState = 'gameOver';
             k.add([
                 k.text("GAME OVER\nAll players jailed!", { size: 60, align: "center" }),
-                k.pos(k.width() / 2, k.height() / 2),
+                k.pos(gameZoneCenterX, k.height() / 2), // Centered in game zone horizontally
                 k.anchor("center"),
                 k.color(k.RED),
                 k.z(200),
@@ -742,12 +839,22 @@ k.scene("game", ({ numPlayers }: { numPlayers: number }) => {
         k.fixed(), // Added k.
         "jailZone"
     ]);
+    const jailTextVerticalAdjustment = 15; // Pixels to move text up
     k.add([
         k.text("JAIL", { size: 50 }),
-        k.pos(GAME_ZONE_X + GAME_ZONE_WIDTH / 2, JAIL_Y + JAIL_HEIGHT / 2),
+        k.pos(GAME_ZONE_X + GAME_ZONE_WIDTH / 2, JAIL_Y + JAIL_HEIGHT / 2 - jailTextVerticalAdjustment), // Adjusted Y
         k.anchor("center"),
         k.color(COLOR_TEXT),
-        k.fixed() // Added k.
+        k.fixed()
+    ]);
+    // Add instructional text below JAIL
+    const jailInstructionYOffset = 40; // Original offset from JAIL center
+    k.add([
+        k.text("Roll a 6 to break out!", { size: 24 }),
+        k.pos(GAME_ZONE_X + GAME_ZONE_WIDTH / 2, JAIL_Y + JAIL_HEIGHT / 2 + jailInstructionYOffset - jailTextVerticalAdjustment), // Adjusted Y
+        k.anchor("center"),
+        k.color(COLOR_TEXT),
+        k.fixed()
     ]);
 
     // --- Spawn Players ---
